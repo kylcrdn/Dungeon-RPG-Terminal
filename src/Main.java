@@ -9,12 +9,14 @@
  * 4. Win: beat all 5 floors. Lose: HP reaches 0.
  */
 
+import java.util.Locale;
 import java.util.Random;
 import java.util.Scanner;
 
 public class Main {
 
-    static Scanner sc = new Scanner(System.in);
+    // Locale.US so decimals are typed with a dot (2.5)
+    static Scanner sc = new Scanner(System.in).useLocale(Locale.US);
     static Random r = new Random();
 
     // Main menu: repeats until the player quits
@@ -61,8 +63,9 @@ public class Main {
         for (int floor = 1; floor <= 5; floor++) {
             System.out.println("\n===== FLOOR " + floor + " =====");
 
-            // Combat (partner's part), returns the HP left
-            hp = fight(floor, hp, damage + weaponDamage(weapon), type);
+            // Combat, returns the HP left
+            int attack = damage + weaponDamage(weapon);
+            hp = fight(floor, hp, maxHP, attack, type);
 
             // Game over
             if (hp <= 0) {
@@ -135,17 +138,190 @@ public class Main {
 
         // Victory
         System.out.println("\n*************************************");
-        System.out.println("  The dragon falls. Silence returns.");
+        System.out.println("  Lucifer falls. Silence returns.");
         System.out.println("  " + name + ", you conquered all 5 floors!");
         System.out.println("  Your legend begins today.");
         System.out.println("*************************************");
     }
 
-    // COMBAT - partner's part. Must return the player's HP after the fight.
-    static int fight(int floor, int hp, int damage, String type) {
-        // Placeholder: always wins and loses 10 HP (return 0 to test Game Over)
-        System.out.println("[Placeholder] You win with " + damage + " damage!");
-        return hp - 10;
+    // COMBAT: one fight on one floor. Returns the player's HP at the end
+    // (0 = the player died).
+    static int fight(int floor, int hp, int maxHP, int attack, String type) {
+        // Enemy of this floor
+        String enemy = "Slime";
+        String special = "Slime Splash";
+        int enemyHP = 30;
+        int enemyAttack = 5;
+        int interval = 4; // special attack every X turns
+
+        switch (floor) {
+            case 2:
+                enemy = "Goblin";
+                special = "Savage Strike";
+                enemyHP = 45;
+                enemyAttack = 8;
+                interval = 3;
+                break;
+            case 3:
+                enemy = "Skeleton";
+                special = "Bone Crusher";
+                enemyHP = 60;
+                enemyAttack = 12;
+                interval = 4;
+                break;
+            case 4:
+                enemy = "Orc";
+                special = "Crushing Blow";
+                enemyHP = 80;
+                enemyAttack = 15;
+                interval = 3;
+                break;
+            case 5:
+                enemy = "Lucifer, Keeper of Hell";
+                special = "Hellfire";
+                enemyHP = 120;
+                enemyAttack = 20;
+                interval = 3;
+                break;
+        }
+
+        int enemyMaxHP = enemyHP;
+        int potions = 2; // potions for this fight
+        int bonus = 0;   // extra damage after defending
+        int turn = 1;
+        boolean phaseTwo = false;
+
+        System.out.println("A wild " + enemy + " appears!");
+
+        // Combat loop: until someone reaches 0 HP
+        while (hp > 0 && enemyHP > 0) {
+
+            // Lucifer gets stronger below half HP
+            if (floor == 5 && enemyHP <= 60 && !phaseTwo) {
+                phaseTwo = true;
+                enemyAttack = enemyAttack + 5;
+                interval = 2;
+                System.out.println("\nLucifer enters Phase 2!");
+            }
+
+            // Damage the enemy will deal this turn
+            int incoming = enemyAttack;
+            if (turn % interval == 0) {
+                incoming = incoming * 2;
+                System.out.println("\nWARNING: " + special + " incoming!");
+            }
+
+            System.out.println("\n--- TURN " + turn + " ---");
+            healthBar("You", hp, maxHP);
+            healthBar(enemy, enemyHP, enemyMaxHP);
+            System.out.println("Potions: " + potions);
+            System.out.println("1. Attack 2. Defend 3. Heal 4. Heavy Attack");
+            System.out.print("Choose: ");
+            int option = askOption(1, 4);
+            int dealt = 0;
+
+            switch (option) {
+                case 1:
+                    // Normal attack: random damage, chance of critical
+                    dealt = attack + r.nextInt(0, 6) + bonus;
+                    bonus = 0;
+                    if (isCritical(type)) {
+                        dealt = dealt * 2;
+                        System.out.println("CRITICAL HIT!");
+                    }
+                    break;
+                case 2:
+                    // Defend: half damage, +5 on the next attack
+                    incoming = incoming / 2;
+                    bonus = 5;
+                    System.out.println("You defend! Next attack +5.");
+                    break;
+                case 3:
+                    // Heal with a potion
+                    if (potions == 0 || hp == maxHP) {
+                        System.out.println("You can't heal now!");
+                        continue; // choose again, the enemy waits
+                    }
+                    potions--;
+                    hp = hp + 30;
+                    if (hp > maxHP) {
+                        hp = maxHP;
+                    }
+                    System.out.println("You heal. HP: " + hp);
+                    break;
+                case 4:
+                    // Heavy attack: the player chooses the power (decimal)
+                    // More power = more damage but less chance to hit
+                    System.out.print("Power (1.5 - 3.0): ");
+                    double power = askDecimal(1.5, 3.0);
+                    int chance = 100 - (int) (power * 25);
+                    if (r.nextInt(1, 101) <= chance) {
+                        dealt = (int) (attack * power) + bonus;
+                        System.out.println("HEAVY ATTACK HITS!");
+                    } else {
+                        System.out.println("Heavy attack missed!");
+                    }
+                    bonus = 0;
+                    break;
+            }
+
+            // Apply the player's damage
+            if (dealt > 0) {
+                enemyHP = enemyHP - dealt;
+                if (enemyHP < 0) {
+                    enemyHP = 0;
+                }
+                System.out.println("You dealt " + dealt + " damage.");
+            }
+
+            // Enemy attacks back if it is still alive
+            if (enemyHP > 0) {
+                hp = hp - incoming;
+                if (hp < 0) {
+                    hp = 0;
+                }
+                System.out.println(enemy + " dealt " + incoming + " damage.");
+            }
+            turn++;
+        }
+
+        if (hp > 0) {
+            System.out.println("\nYou defeated " + enemy + "!");
+        }
+        return hp;
+    }
+
+    // Prints a health bar of 20 characters
+    static void healthBar(String name, int hp, int maxHP) {
+        System.out.print("[");
+        for (int i = 0; i < 20; i++) {
+            if (i * maxHP < hp * 20) {
+                System.out.print("#");
+            } else {
+                System.out.print("-");
+            }
+        }
+        System.out.println("] " + name + " " + hp + "/" + maxHP);
+    }
+
+    // Critical hit: archers 25%, the other classes 15%
+    static boolean isCritical(String type) {
+        int roll = r.nextInt(1, 101);
+        if (type.equals("archer")) {
+            return roll <= 25;
+        }
+        return roll <= 15;
+    }
+
+    // Asks for a decimal between min and max until it is valid
+    static double askDecimal(double min, double max) {
+        double value = sc.nextDouble();
+        while (value < min || value > max) {
+            System.out.print("Invalid. Choose " + min + " - " + max + ": ");
+            value = sc.nextDouble();
+        }
+        sc.nextLine();
+        return value;
     }
 
     // Asks for a number between min and max until it is valid
@@ -198,7 +374,7 @@ public class Main {
         if (type.equals("warrior")) {
             return 15;
         } else if (type.equals("mage")) {
-            return 12;
+            return 17;
         } else {
             return 14;
         }
